@@ -657,7 +657,7 @@
 
 <script>
   // ========== CONFIG ==========
-  const ADMIN_PASSWORD = "kl1234"; // <-- เปลี่ยนรหัสผ่านที่นี่
+  const ADMIN_PASSWORD = "admin1234"; // <-- เปลี่ยนรหัสผ่านที่นี่
   const API_URL_KEY = "kl_po_api_url";
   const AUTO_REFRESH_INTERVAL = 30000;
 
@@ -666,7 +666,7 @@
   let editingPOId = null;
   let poList = [];
   let charts = {};
-  let API_URL = localStorage.getItem(API_URL_KEY) || "";
+  let API_URL = localStorage.getItem(API_URL_KEY) || "https://script.google.com/macros/s/AKfycbywQ9EskZjdz47Tkz2H8muEN9nUnJ1GELFjdLFUakxlVGw6c5INzECDTnhzODzu6Bb--A/exec";
   let autoRefreshTimer = null;
   let pendingFile = null; // File object waiting to be uploaded
   let currentFileInfo = null; // {fileId, fileName} of currently attached file
