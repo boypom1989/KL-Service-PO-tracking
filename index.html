@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KL Service - PO Tracking System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Sukhumvit Set', 'Noto Sans Thai', sans-serif;
+    background: #EEF2F7; color: #1a2540; line-height: 1.6; min-height: 100vh;
+  }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  /* Setup Banner */
+  .setup-banner {
+    background: #FFF4E0; border: 0.5px solid #F0B95F;
+    color: #8C5A0E; padding: 16px 20px; border-radius: 8px;
+    margin-bottom: 20px; font-size: 14px;
+  }
+  .setup-banner code {
+    background: #E8EDF3; padding: 2px 6px;
+    border-radius: 4px; font-family: monospace;
+  }
+
+  /* Connection status */
+  .connection-status {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+  }
+  .conn-online { background: #DCEEDA; color: #267121; }
+  .conn-offline { background: #FAD8D8; color: #A82626; }
+  .conn-loading { background: #FFF4E0; color: #8C5A0E; }
+  .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Header */
+  .header {
+    background: white; border-radius: 8px; padding: 24px 32px;
+    margin-bottom: 24px; border: 0.5px solid #D5DCE5;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 16px;
+  }
+  .header h1 { font-size: 24px; font-weight: 500; }
+  .header-subtitle { font-size: 13px; color: #5A6987; margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  .mode-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 13px; font-weight: 500;
+  }
+  .mode-view { background: #E3EBF7; color: #0F2C5C; }
+  .mode-edit { background: #DCEEDA; color: #1E5F1A; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 4px; background: white;
+    border-radius: 8px; padding: 6px; margin-bottom: 24px;
+    border: 0.5px solid #D5DCE5; width: fit-content;
+  }
+  .tab {
+    padding: 10px 20px; border-radius: 8px; font-size: 14px;
+    font-weight: 500; cursor: pointer; border: none;
+    background: transparent; color: #5A6987; transition: all 0.15s;
+    font-family: inherit;
+  }
+  .tab:hover { background: #F4F7FB; }
+  .tab.active { background: #0F2C5C; color: white; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Stats */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: white; border-radius: 8px; padding: 18px 20px;
+    border: 0.5px solid #D5DCE5;
+  }
+  .stat-label { font-size: 13px; color: #5A6987; margin-bottom: 6px; }
+  .stat-value { font-size: 26px; font-weight: 500; }
+  .stat-pending { color: #8C5A0E; }
+  .stat-progress { color: #1E4585; }
+  .stat-shipped { color: #1E5F1A; }
+  .stat-cancelled { color: #8B1919; }
+
+  /* Charts */
+  .charts-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px; margin-bottom: 24px;
+  }
+  .chart-card {
+    background: white; border-radius: 8px; padding: 24px;
+    border: 0.5px solid #D5DCE5;
+  }
+  .chart-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; }
+  .chart-container { position: relative; height: 300px; }
+
+  /* Toolbar */
+  .toolbar {
+    background: white; border-radius: 8px; padding: 16px 20px;
+    margin-bottom: 16px; border: 0.5px solid #D5DCE5;
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+  }
+  .search-box { flex: 1; min-width: 200px; position: relative; }
+  .search-box input {
+    width: 100%; padding: 10px 14px 10px 38px;
+    border: 0.5px solid #D5DCE5; border-radius: 8px;
+    font-size: 14px; background: #F8FAFC; font-family: inherit;
+  }
+  .search-box::before {
+    content: "🔍"; position: absolute; left: 12px;
+    top: 50%; transform: translateY(-50%); font-size: 14px; opacity: 0.5;
+  }
+
+  select, input[type="text"], input[type="date"], input[type="password"] {
+    padding: 10px 14px; border: 0.5px solid #D5DCE5;
+    border-radius: 8px; font-size: 14px; background: white;
+    cursor: pointer; font-family: inherit;
+  }
+
+  button {
+    padding: 10px 18px; border: 0.5px solid #D5DCE5;
+    border-radius: 8px; font-size: 14px; cursor: pointer;
+    background: white; transition: all 0.15s; font-weight: 500;
+    font-family: inherit;
+  }
+  button:hover { background: #F4F7FB; }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-primary { background: #0F2C5C; color: white; border-color: #1a2540; }
+  .btn-primary:hover { background: #1E4585; }
+  .btn-success { background: #1E5F1A; color: white; border-color: #1E5F1A; }
+  .btn-success:hover { background: #267121; }
+  .btn-danger { background: #8B1919; color: white; border-color: #8B1919; }
+  .btn-danger:hover { background: #A82626; }
+  .btn-icon { padding: 6px 10px; font-size: 13px; }
+
+  .export-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-excel { background: #1E5F1A; color: white; border-color: #1E5F1A; }
+  .btn-excel:hover { background: #267121; }
+  .btn-csv { background: #1E4585; color: white; border-color: #1E4585; }
+  .btn-csv:hover { background: #0F2C5C; }
+  .btn-pdf { background: #8B1919; color: white; border-color: #8B1919; }
+  .btn-pdf:hover { background: #A82626; }
+
+  /* Refresh button */
+  .btn-refresh {
+    padding: 8px 14px; font-size: 13px;
+    background: #E3EBF7; color: #0F2C5C; border-color: #B5C8E4;
+  }
+  .btn-refresh:hover { background: #B5C8E4; }
+  .spinning { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* Table */
+  .table-wrapper {
+    background: white; border-radius: 8px;
+    border: 0.5px solid #D5DCE5; overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  th {
+    background: #F8FAFC; text-align: left; padding: 14px 16px;
+    font-size: 13px; font-weight: 500; color: #5A6987;
+    border-bottom: 0.5px solid #D5DCE5; white-space: nowrap;
+  }
+  td {
+    padding: 14px 16px; font-size: 14px;
+    border-bottom: 0.5px solid #E8EDF3; color: #1a2540;
+  }
+  tbody tr:hover { background: #F8FAFC; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .po-number { font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-weight: 500; color: #1E4585; }
+
+  .status-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 500; white-space: nowrap;
+  }
+  .status-pending { background: #FFF4E0; color: #8C5A0E; }
+  .status-progress { background: #E3EBF7; color: #0F2C5C; }
+  .status-shipped { background: #DCEEDA; color: #267121; }
+  .status-cancelled { background: #FAD8D8; color: #A82626; }
+
+  .actions { display: flex; gap: 6px; flex-wrap: nowrap; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: #5A6987; }
+  .empty-state-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.3; }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 1000;
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: white; border-radius: 8px; padding: 32px;
+    width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto;
+  }
+  .modal h2 { font-size: 20px; font-weight: 500; margin-bottom: 8px; }
+  .modal-subtitle { font-size: 14px; color: #5A6987; margin-bottom: 24px; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block; font-size: 13px; font-weight: 500;
+    color: #1a2540; margin-bottom: 6px;
+  }
+  .form-group input, .form-group select {
+    width: 100%; padding: 10px 14px;
+    border: 0.5px solid #D5DCE5; border-radius: 8px;
+    font-size: 14px; font-family: inherit; background: white;
+  }
+  .form-group textarea {
+    width: 100%; padding: 10px 14px;
+    border: 0.5px solid #D5DCE5; border-radius: 8px;
+    font-size: 13px; font-family: monospace; background: white;
+    min-height: 60px; resize: vertical;
+  }
+
+  .modal-actions {
+    display: flex; gap: 10px; justify-content: flex-end;
+    margin-top: 24px; padding-top: 20px;
+    border-top: 0.5px solid rgba(0,0,0,0.1);
+  }
+
+  .password-icon { font-size: 32px; text-align: center; margin-bottom: 12px; }
+
+  .alert {
+    padding: 12px 16px; border-radius: 8px; font-size: 13px;
+    margin-bottom: 16px; display: none;
+  }
+  .alert.show { display: block; }
+  .alert-error { background: #FAD8D8; color: #A82626; border: 0.5px solid #E89797; }
+  .alert-success { background: #DCEEDA; color: #267121; border: 0.5px solid #97C490; }
+  .alert-info { background: #E3EBF7; color: #0F2C5C; border: 0.5px solid #B5C8E4; }
+
+  .loading { text-align: center; padding: 40px; color: #5A6987; }
+  .filter-label { font-size: 13px; color: #5A6987; font-weight: 500; margin-right: 4px; }
+
+  /* File attachment */
+  .file-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 999px;
+    background: #FAD8D8; color: #A82626;
+    font-size: 12px; font-weight: 500;
+    text-decoration: none; border: 0.5px solid #E89797;
+    transition: all 0.15s;
+  }
+  .file-link:hover { background: #E89797; }
+  .file-empty { font-size: 12px; color: #5A6987; font-style: italic; }
+
+  .file-upload-area {
+    border: 2px dashed rgba(0,0,0,0.2); border-radius: 8px;
+    padding: 16px; text-align: center; cursor: pointer;
+    transition: all 0.15s; background: #F8FAFC;
+  }
+  .file-upload-area:hover { border-color: #1E4585; background: #E3EBF7; }
+  .file-upload-area.has-file {
+    border-style: solid; border-color: #97C490;
+    background: #DCEEDA; text-align: left;
+  }
+  .file-info {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px;
+  }
+  .file-icon { font-size: 24px; }
+  .file-details { flex: 1; min-width: 0; }
+  .file-name {
+    font-weight: 500; color: #1a2540;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .file-size { color: #5A6987; font-size: 12px; }
+  .upload-hint { color: #5A6987; font-size: 13px; }
+  .upload-hint strong { color: #1E4585; }
+  .file-actions { display: flex; gap: 6px; }
+
+  .upload-progress {
+    width: 100%; height: 4px; background: #eee;
+    border-radius: 2px; margin-top: 8px; overflow: hidden;
+    display: none;
+  }
+  .upload-progress.show { display: block; }
+  .upload-progress-bar {
+    height: 100%; background: #1E4585;
+    width: 0%; transition: width 0.3s;
+  }
+
+  /* Header - Corporate Navy with Gradient */
+  .header {
+    background: linear-gradient(135deg, #0F2C5C 0%, #1E4585 100%);
+    border-radius: 8px; padding: 28px 36px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(15,44,92,0.15);
+    color: white;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 16px;
+  }
+  .header-brand {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .logo-circle {
+    width: 56px; height: 56px;
+    background: white; color: #0F2C5C;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    letter-spacing: -1px;
+  }
+  .header-text h1 {
+    font-size: 22px; font-weight: 600; letter-spacing: -0.3px;
+    color: white;
+  }
+  .header-subtitle {
+    font-size: 13px; opacity: 0.95; margin-top: 4px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    color: white;
+  }
+  .company-tag {
+    display: inline-block; background: rgba(255,255,255,0.15);
+    padding: 2px 10px; border-radius: 4px;
+    font-size: 12px; font-weight: 500;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  /* Override refresh button for dark header */
+  .btn-refresh {
+    background: rgba(255,255,255,0.15) !important;
+    color: white !important;
+    border-color: rgba(255,255,255,0.3) !important;
+  }
+  .btn-refresh:hover {
+    background: rgba(255,255,255,0.25) !important;
+    color: white !important;
+  }
+  .header .mode-view {
+    background: rgba(255,255,255,0.1); color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  .header button[onclick="openSettingsModal()"] {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border-color: rgba(255,255,255,0.3);
+  }
+  .header button[onclick="openSettingsModal()"]:hover {
+    background: rgba(255,255,255,0.25);
+    color: white;
+  }
+
+  /* Stat cards with top border accent */
+  .stat-card {
+    border-top: 3px solid #1E4585 !important;
+  }
+
+  /* Table header - dark navy */
+  th {
+    background: #0F2C5C !important;
+    color: white !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    border-bottom: none !important;
+  }
+
+  /* Status badges with borders */
+  .status-pending { border: 1px solid #F0B95F; }
+  .status-progress { border: 1px solid #B5C8E4; }
+  .status-shipped { border: 1px solid #97C490; }
+  .status-cancelled { border: 1px solid #E89797; }
+
+  /* Modal backdrop blur */
+  .modal-overlay {
+    background: rgba(15,44,92,0.5) !important;
+    backdrop-filter: blur(4px);
+  }
+  .modal {
+    box-shadow: 0 20px 60px rgba(15,44,92,0.3);
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center; padding: 20px 0; margin-top: 20px;
+    color: #5A6987; font-size: 12px;
+  }
+  .footer strong { color: #0F2C5C; }
+
+  /* Toast notifications */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    padding: 14px 20px; border-radius: 8px;
+    background: #0F2C5C; color: white; font-size: 14px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    z-index: 2000; opacity: 0; transform: translateY(20px);
+    transition: all 0.3s; max-width: 400px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast-success { background: #1E5F1A; }
+  .toast-error { background: #8B1919; }
+
+  @media (max-width: 768px) {
+    .container { padding: 12px; }
+    .header { padding: 16px 20px; }
+    .header h1 { font-size: 20px; }
+    .modal { padding: 24px; }
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Setup Banner (shown when not configured) -->
+  <div id="setupBanner" class="setup-banner" style="display:none;">
+    ⚠️ <strong>ยังไม่ได้ตั้งค่า Google Sheets!</strong>
+    กรุณาตั้งค่าก่อนใช้งาน → <a href="#" onclick="openSettingsModal()" style="color:#8C5A0E; font-weight:500;">คลิกที่นี่เพื่อตั้งค่า</a>
+    หรือดูคู่มือใน <code>SETUP-GUIDE.md</code>
+  </div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand">
+      <div class="logo-circle">KL</div>
+      <div class="header-text">
+        <h1>PO Tracking System</h1>
+        <div class="header-subtitle">
+          <span class="company-tag">KL Service and Trading Co., Ltd.</span>
+          <span id="connStatus" class="connection-status conn-loading">
+            <span class="pulse"></span> กำลังเชื่อมต่อ...
+          </span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <button class="btn-refresh" onclick="loadData(true)" title="Refresh ข้อมูล"><span id="refreshIcon">🔄</span> Refresh</button>
+      <span id="modeBadge" class="mode-badge mode-view">👁 โหมดดูข้อมูล</span>
+      <button id="loginBtn" class="btn-primary">🔓 โหมดแก้ไข</button>
+      <button id="logoutBtn" style="display:none;" class="btn-danger">🔒 ออกจากระบบ</button>
+      <button onclick="openSettingsModal()" title="ตั้งค่า">⚙️</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-view="list">📋 รายการ PO</button>
+    <button class="tab" data-view="dashboard">📊 Dashboard</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card"><div class="stat-label">รวมทั้งหมด</div><div class="stat-value" id="statTotal">0</div></div>
+    <div class="stat-card"><div class="stat-label">รอดำเนินการ</div><div class="stat-value stat-pending" id="statPending">0</div></div>
+    <div class="stat-card"><div class="stat-label">กำลังผลิต</div><div class="stat-value stat-progress" id="statProgress">0</div></div>
+    <div class="stat-card"><div class="stat-label">จัดส่งแล้ว</div><div class="stat-value stat-shipped" id="statShipped">0</div></div>
+    <div class="stat-card"><div class="stat-label">ยกเลิก</div><div class="stat-value stat-cancelled" id="statCancelled">0</div></div>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div id="viewList" class="view active">
+    <div class="toolbar">
+      <div class="search-box"><input type="text" id="searchInput" placeholder="ค้นหา PO Number หรือชื่อลูกค้า..."></div>
+      <span class="filter-label">เดือน:</span>
+      <select id="filterMonth">
+        <option value="">ทุกเดือน</option>
+        <option value="1">มกราคม</option><option value="2">กุมภาพันธ์</option>
+        <option value="3">มีนาคม</option><option value="4">เมษายน</option>
+        <option value="5">พฤษภาคม</option><option value="6">มิถุนายน</option>
+        <option value="7">กรกฎาคม</option><option value="8">สิงหาคม</option>
+        <option value="9">กันยายน</option><option value="10">ตุลาคม</option>
+        <option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+      </select>
+      <span class="filter-label">ปี:</span>
+      <select id="filterYear"><option value="">ทุกปี</option></select>
+      <select id="filterStatus">
+        <option value="">ทุกสถานะ</option>
+        <option value="Pending">Pending</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Shipped">Shipped</option>
+        <option value="Cancelled">Cancelled</option>
+      </select>
+      <button id="addBtn" class="btn-success" style="display:none;">+ เพิ่ม PO</button>
+    </div>
+
+    <div class="toolbar">
+      <span class="filter-label">📤 Export:</span>
+      <div class="export-group">
+        <button class="btn-excel" onclick="exportExcel()">📗 Excel</button>
+        <button class="btn-csv" onclick="exportCSV()">📄 CSV</button>
+        <button class="btn-pdf" onclick="exportPDF()">📕 PDF</button>
+      </div>
+      <span id="filterInfo" style="margin-left:auto; font-size:13px; color:#5A6987;"></span>
+    </div>
+
+    <div class="table-wrapper">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Date Receive PO</th>
+              <th>PO Number</th>
+              <th>Customer Name</th>
+              <th>ETD Date</th>
+              <th>PO Status</th>
+              <th>📎 ไฟล์แนบ</th>
+              <th id="actionsHeader" style="display:none;">การจัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="poTableBody">
+            <tr><td colspan="7" class="loading">กำลังโหลดข้อมูล...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="viewDashboard" class="view">
+    <div class="toolbar">
+      <span class="filter-label">📅 ดูสถิติของ:</span>
+      <select id="dashMonth">
+        <option value="">ทุกเดือน</option>
+        <option value="1">มกราคม</option><option value="2">กุมภาพันธ์</option>
+        <option value="3">มีนาคม</option><option value="4">เมษายน</option>
+        <option value="5">พฤษภาคม</option><option value="6">มิถุนายน</option>
+        <option value="7">กรกฎาคม</option><option value="8">สิงหาคม</option>
+        <option value="9">กันยายน</option><option value="10">ตุลาคม</option>
+        <option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+      </select>
+      <select id="dashYear"><option value="">ทุกปี</option></select>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">📊 สถานะ PO</div><div class="chart-container"><canvas id="pieChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">📈 PO รายเดือน</div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">👥 Top 5 ลูกค้า</div><div class="chart-container"><canvas id="topCustomerChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">📅 แนวโน้ม 6 เดือนล่าสุด</div><div class="chart-container"><canvas id="trendChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    © 2026 <strong>KL Service and Trading Co., Ltd.</strong> · PO Tracking System
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal-overlay">
+  <div class="modal">
+    <h2>⚙️ ตั้งค่า Google Sheets</h2>
+    <p class="modal-subtitle">กรอก URL ของ Google Apps Script Web App</p>
+    <div id="settingsAlert" class="alert alert-info">
+      💡 <strong>วิธีรับ URL:</strong> เปิดไฟล์ <code>SETUP-GUIDE.md</code> ทำตามขั้นตอน เมื่อ Deploy เสร็จจะได้ URL หน้าตาประมาณนี้:<br>
+      <code style="font-size:11px; word-break:break-all;">https://script.google.com/macros/s/AKfy.../exec</code>
+    </div>
+    <div class="form-group">
+      <label>🔗 Google Apps Script URL</label>
+      <textarea id="apiUrlInput" placeholder="https://script.google.com/macros/s/.../exec"></textarea>
+    </div>
+    <div id="settingsResult" class="alert"></div>
+    <div class="modal-actions">
+      <button onclick="testConnection()">🔍 ทดสอบการเชื่อมต่อ</button>
+      <button onclick="closeSettingsModal()">ยกเลิก</button>
+      <button class="btn-primary" onclick="saveSettings()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login Modal -->
+<div id="loginModal" class="modal-overlay">
+  <div class="modal">
+    <div class="password-icon">🔐</div>
+    <h2 style="text-align:center;">เข้าสู่โหมดแก้ไข</h2>
+    <p class="modal-subtitle" style="text-align:center;">กรุณาใส่รหัสผ่าน</p>
+    <div id="loginAlert" class="alert alert-error"></div>
+    <div class="form-group">
+      <label>รหัสผ่าน</label>
+      <input type="password" id="passwordInput" placeholder="ใส่รหัสผ่าน...">
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeLoginModal()">ยกเลิก</button>
+      <button class="btn-primary" onclick="checkPassword()">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- PO Form Modal -->
+<div id="poModal" class="modal-overlay">
+  <div class="modal">
+    <h2 id="poModalTitle">เพิ่ม PO ใหม่</h2>
+    <p class="modal-subtitle">กรอกข้อมูลให้ครบถ้วน</p>
+    <div id="poAlert" class="alert alert-error"></div>
+    <div class="form-group"><label>📅 Date Receive PO</label><input type="date" id="dateReceive"></div>
+    <div class="form-group"><label>📄 PO Number</label><input type="text" id="poNumber" placeholder="เช่น PO-2026-001"></div>
+    <div class="form-group"><label>👤 Customer Name</label><input type="text" id="customerName" placeholder="ชื่อลูกค้า"></div>
+    <div class="form-group"><label>🚚 ETD Date</label><input type="date" id="etdDate"></div>
+    <div class="form-group">
+      <label>📊 PO Status</label>
+      <select id="poStatus">
+        <option value="Pending">Pending - รอดำเนินการ</option>
+        <option value="In Progress">In Progress - กำลังผลิต</option>
+        <option value="Shipped">Shipped - จัดส่งแล้ว</option>
+        <option value="Cancelled">Cancelled - ยกเลิก</option>
+      </select>
+    </div>
+    <div class="form-group" id="fileUploadSection" style="display:none;">
+      <label>📎 ไฟล์แนบ PDF <span style="color:#5A6987; font-weight:400;">(สูงสุด 5 MB)</span></label>
+      <div id="fileUploadArea" class="file-upload-area" onclick="document.getElementById('fileInput').click()">
+        <div id="fileUploadEmpty" class="upload-hint">
+          📁 <strong>คลิกเพื่อเลือกไฟล์ PDF</strong><br>
+          <span style="font-size:12px;">หรือลากไฟล์มาวางที่นี่</span>
+        </div>
+        <div id="fileUploadHasFile" style="display:none;">
+          <div class="file-info">
+            <span class="file-icon">📄</span>
+            <div class="file-details">
+              <div class="file-name" id="uploadedFileName">filename.pdf</div>
+              <div class="file-size" id="uploadedFileSize">0 KB</div>
+            </div>
+            <div class="file-actions">
+              <button type="button" class="btn-icon" onclick="event.stopPropagation(); viewCurrentFile()" id="viewFileBtn" style="display:none;">👁️ ดู</button>
+              <button type="button" class="btn-icon btn-danger" onclick="event.stopPropagation(); removeFile()">🗑️</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="uploadProgress" class="upload-progress">
+        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,application/pdf" style="display:none;">
+    </div>
+    <div class="modal-actions">
+      <button onclick="closePOModal()">ยกเลิก</button>
+      <button id="savePOBtn" class="btn-primary" onclick="savePO()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+  // ========== CONFIG ==========
+  const ADMIN_PASSWORD = "kl1234"; // <-- เปลี่ยนรหัสผ่านที่นี่
+  const API_URL_KEY = "kl_po_api_url";
+  const AUTO_REFRESH_INTERVAL = 30000;
+
+  // ========== STATE ==========
+  let isEditMode = false;
+  let editingPOId = null;
+  let poList = [];
+  let charts = {};
+  let API_URL = localStorage.getItem(API_URL_KEY) || "";
+  let autoRefreshTimer = null;
+  let pendingFile = null; // File object waiting to be uploaded
+  let currentFileInfo = null; // {fileId, fileName} of currently attached file
+
+  // ========== TOAST ==========
+  function showToast(msg, type = "") {
+    const toast = document.getElementById("toast");
+    toast.textContent = msg;
+    toast.className = "toast show" + (type ? " toast-" + type : "");
+    setTimeout(() => toast.classList.remove("show"), 3000);
+  }
+
+  // ========== CONNECTION STATUS ==========
+  function setConnStatus(status, text) {
+    const el = document.getElementById("connStatus");
+    el.className = "connection-status conn-" + status;
+    el.innerHTML = `<span class="pulse"></span> ${text}`;
+  }
+
+  // ========== API CALLS ==========
+  async function apiGet() {
+    if (!API_URL) throw new Error("ยังไม่ได้ตั้งค่า API URL");
+    const res = await fetch(API_URL);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Unknown error");
+    return data.data;
+  }
+
+  async function apiPost(action, payload = {}) {
+    if (!API_URL) throw new Error("ยังไม่ได้ตั้งค่า API URL");
+    const res = await fetch(API_URL, {
+      method: "POST",
+      // Use text/plain to avoid CORS preflight (Apps Script handles it)
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action, ...payload }),
+      redirect: "follow"
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Unknown error");
+    return data.data;
+  }
+
+  // ========== LOAD DATA ==========
+  async function loadData(isManual = false) {
+    if (!API_URL) {
+      document.getElementById("setupBanner").style.display = "block";
+      setConnStatus("offline", "ยังไม่ได้ตั้งค่า");
+      document.getElementById("poTableBody").innerHTML = `
+        <tr><td colspan="7" class="empty-state">
+          <div class="empty-state-icon">⚙️</div>
+          <div>กรุณาตั้งค่า Google Sheets ก่อนใช้งาน</div>
+          <button class="btn-primary" style="margin-top:16px;" onclick="openSettingsModal()">ตั้งค่าตอนนี้</button>
+        </td></tr>`;
+      return;
+    }
+
+    if (isManual) {
+      document.getElementById("refreshIcon").classList.add("spinning");
+    }
+    setConnStatus("loading", "กำลังโหลด...");
+
+    try {
+      poList = await apiGet();
+      setConnStatus("online", "✓ เชื่อมต่อสำเร็จ");
+      document.getElementById("setupBanner").style.display = "none";
+      populateYearFilters();
+      renderAll();
+      if (isManual) showToast("✓ โหลดข้อมูลสำเร็จ", "success");
+    } catch (err) {
+      console.error(err);
+      setConnStatus("offline", "✗ ไม่สามารถเชื่อมต่อ");
+      if (isManual) showToast("เชื่อมต่อไม่สำเร็จ: " + err.message, "error");
+      document.getElementById("poTableBody").innerHTML = `
+        <tr><td colspan="7" class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <div>ไม่สามารถโหลดข้อมูลได้</div>
+          <div style="font-size:12px; color:#8B1919; margin-top:8px;">${err.message}</div>
+          <button class="btn-primary" style="margin-top:16px;" onclick="loadData(true)">ลองใหม่</button>
+        </td></tr>`;
+    } finally {
+      document.getElementById("refreshIcon").classList.remove("spinning");
+    }
+  }
+
+  // Auto-refresh
+  function startAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    autoRefreshTimer = setInterval(() => {
+      if (API_URL && document.visibilityState === "visible") {
+        loadData(false);
+      }
+    }, AUTO_REFRESH_INTERVAL);
+  }
+
+  // ========== SETTINGS ==========
+  function openSettingsModal() {
+    document.getElementById("apiUrlInput").value = API_URL;
+    document.getElementById("settingsResult").classList.remove("show");
+    document.getElementById("settingsModal").classList.add("active");
+  }
+
+  function closeSettingsModal() {
+    document.getElementById("settingsModal").classList.remove("active");
+  }
+
+  async function testConnection() {
+    const url = document.getElementById("apiUrlInput").value.trim();
+    const result = document.getElementById("settingsResult");
+    result.className = "alert alert-info show";
+    result.textContent = "⏳ กำลังทดสอบ...";
+
+    if (!url) {
+      result.className = "alert alert-error show";
+      result.textContent = "⚠️ กรุณาใส่ URL";
+      return;
+    }
+
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) {
+        result.className = "alert alert-success show";
+        result.textContent = `✓ เชื่อมต่อสำเร็จ! พบข้อมูล ${data.data.length} รายการ`;
+      } else {
+        throw new Error(data.error || "Unknown");
+      }
+    } catch (err) {
+      result.className = "alert alert-error show";
+      result.textContent = "✗ เชื่อมต่อไม่สำเร็จ: " + err.message;
+    }
+  }
+
+  function saveSettings() {
+    const url = document.getElementById("apiUrlInput").value.trim();
+    if (!url) { showToast("⚠️ กรุณาใส่ URL", "error"); return; }
+    if (!url.includes("script.google.com")) {
+      if (!confirm("URL ที่ใส่ไม่ใช่ Google Apps Script URL คุณต้องการบันทึกหรือไม่?")) return;
+    }
+    API_URL = url;
+    localStorage.setItem(API_URL_KEY, url);
+    closeSettingsModal();
+    showToast("✓ บันทึกการตั้งค่าแล้ว", "success");
+    loadData(true);
+    startAutoRefresh();
+  }
+
+  // ========== FILTER ==========
+  function getFilteredList() {
+    const search = document.getElementById("searchInput").value.toLowerCase();
+    const statusFilter = document.getElementById("filterStatus").value;
+    const monthFilter = document.getElementById("filterMonth").value;
+    const yearFilter = document.getElementById("filterYear").value;
+
+    let filtered = poList.filter(po => {
+      const matchSearch = !search ||
+        String(po.poNumber).toLowerCase().includes(search) ||
+        String(po.customerName).toLowerCase().includes(search);
+      const matchStatus = !statusFilter || po.status === statusFilter;
+      const d = new Date(po.dateReceive);
+      const matchMonth = !monthFilter || (d.getMonth() + 1) === parseInt(monthFilter);
+      const matchYear = !yearFilter || d.getFullYear() === parseInt(yearFilter);
+      return matchSearch && matchStatus && matchMonth && matchYear;
+    });
+
+    filtered.sort((a, b) => new Date(b.dateReceive) - new Date(a.dateReceive));
+    return filtered;
+  }
+
+  function populateYearFilters() {
+    const years = [...new Set(poList.map(p => new Date(p.dateReceive).getFullYear()))].filter(y => !isNaN(y)).sort((a,b) => b-a);
+    const currentYear = new Date().getFullYear();
+    if (!years.includes(currentYear)) years.unshift(currentYear);
+
+    ["filterYear", "dashYear"].forEach(id => {
+      const sel = document.getElementById(id);
+      const current = sel.value;
+      sel.innerHTML = '<option value="">ทุกปี</option>' +
+        years.map(y => `<option value="${y}">${y}</option>`).join('');
+      sel.value = current;
+    });
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById("poTableBody");
+    const filtered = getFilteredList();
+    document.getElementById("filterInfo").textContent = `แสดง ${filtered.length} จาก ${poList.length} รายการ`;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">
+        <div class="empty-state-icon">📭</div><div>ไม่พบข้อมูล PO</div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(po => `
+      <tr>
+        <td>${formatDate(po.dateReceive)}</td>
+        <td><span class="po-number">${escapeHtml(po.poNumber)}</span></td>
+        <td>${escapeHtml(po.customerName)}</td>
+        <td>${formatDate(po.etdDate)}</td>
+        <td><span class="status-badge ${getStatusClass(po.status)}">${po.status}</span></td>
+        <td>${renderFileCell(po)}</td>
+        ${isEditMode ? `<td><div class="actions">
+          <button class="btn-icon" onclick="editPO(${po.id})">✏️</button>
+          <button class="btn-icon btn-danger" onclick="deletePO(${po.id})">🗑️</button>
+        </div></td>` : ''}
+      </tr>`).join('');
+  }
+
+  function renderFileCell(po) {
+    if (po.fileId && po.fileName) {
+      const url = `https://drive.google.com/file/d/${po.fileId}/view`;
+      return `<a href="${url}" target="_blank" class="file-link" title="${escapeHtml(po.fileName)}">📄 เปิด PDF</a>`;
+    }
+    return `<span class="file-empty">ไม่มีไฟล์</span>`;
+  }
+
+  function updateStats() {
+    document.getElementById("statTotal").textContent = poList.length;
+    document.getElementById("statPending").textContent = poList.filter(p => p.status === "Pending").length;
+    document.getElementById("statProgress").textContent = poList.filter(p => p.status === "In Progress").length;
+    document.getElementById("statShipped").textContent = poList.filter(p => p.status === "Shipped").length;
+    document.getElementById("statCancelled").textContent = poList.filter(p => p.status === "Cancelled").length;
+  }
+
+  function getStatusClass(status) {
+    return { "Pending":"status-pending","In Progress":"status-progress","Shipped":"status-shipped","Cancelled":"status-cancelled" }[status] || "status-pending";
+  }
+  function formatDate(dateStr) {
+    if (!dateStr) return "-";
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    return d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML;
+  }
+
+  // ========== CHARTS ==========
+  function getDashboardData() {
+    const monthFilter = document.getElementById("dashMonth").value;
+    const yearFilter = document.getElementById("dashYear").value;
+    return poList.filter(po => {
+      const d = new Date(po.dateReceive);
+      const matchMonth = !monthFilter || (d.getMonth() + 1) === parseInt(monthFilter);
+      const matchYear = !yearFilter || d.getFullYear() === parseInt(yearFilter);
+      return matchMonth && matchYear;
+    });
+  }
+
+  function renderCharts() {
+    const data = getDashboardData();
+    Object.values(charts).forEach(c => c && c.destroy());
+    charts = {};
+
+    const statusCounts = {
+      "Pending": data.filter(p => p.status === "Pending").length,
+      "In Progress": data.filter(p => p.status === "In Progress").length,
+      "Shipped": data.filter(p => p.status === "Shipped").length,
+      "Cancelled": data.filter(p => p.status === "Cancelled").length
+    };
+
+    charts.pie = new Chart(document.getElementById("pieChart"), {
+      type: 'doughnut',
+      data: { labels: Object.keys(statusCounts), datasets: [{ data: Object.values(statusCounts), backgroundColor: ['#F0B95F','#378ADD','#97C459','#E24B4A'], borderWidth: 2, borderColor: '#fff' }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 13 } } } } }
+    });
+
+    const monthCounts = Array(12).fill(0);
+    data.forEach(po => { const m = new Date(po.dateReceive).getMonth(); if (!isNaN(m)) monthCounts[m]++; });
+    const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+    charts.bar = new Chart(document.getElementById("barChart"), {
+      type: 'bar',
+      data: { labels: monthNames, datasets: [{ label: 'จำนวน PO', data: monthCounts, backgroundColor: '#378ADD', borderRadius: 6 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+    const customerCounts = {};
+    data.forEach(po => { customerCounts[po.customerName] = (customerCounts[po.customerName] || 0) + 1; });
+    const topCustomers = Object.entries(customerCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+
+    charts.customer = new Chart(document.getElementById("topCustomerChart"), {
+      type: 'bar',
+      data: { labels: topCustomers.map(c => c[0]), datasets: [{ label: 'จำนวน PO', data: topCustomers.map(c => c[1]), backgroundColor: '#7F77DD', borderRadius: 6 }] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+    const now = new Date();
+    const labels = [], trendData = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      labels.push(monthNames[d.getMonth()] + ' ' + (d.getFullYear() + 543).toString().slice(-2));
+      const count = poList.filter(po => {
+        const pd = new Date(po.dateReceive);
+        return pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear();
+      }).length;
+      trendData.push(count);
+    }
+
+    charts.trend = new Chart(document.getElementById("trendChart"), {
+      type: 'line',
+      data: { labels, datasets: [{ label: 'จำนวน PO', data: trendData, borderColor: '#1E5F1A', backgroundColor: 'rgba(29,158,117,0.1)', tension: 0.3, fill: true, pointRadius: 5, pointBackgroundColor: '#1E5F1A' }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+  }
+
+  function renderAll() {
+    updateStats();
+    renderTable();
+    if (document.getElementById("viewDashboard").classList.contains("active")) renderCharts();
+  }
+
+  // ========== EXPORT ==========
+  function getExportData() {
+    return getFilteredList().map(po => ({
+      'Date Receive': po.dateReceive,
+      'PO Number': po.poNumber,
+      'Customer Name': po.customerName,
+      'ETD Date': po.etdDate,
+      'Status': po.status
+    }));
+  }
+
+  function exportExcel() {
+    const data = getExportData();
+    if (data.length === 0) { showToast("ไม่มีข้อมูลสำหรับ Export", "error"); return; }
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{wch:15},{wch:18},{wch:30},{wch:15},{wch:15}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "PO List");
+    XLSX.writeFile(wb, `PO_List_${getDateStamp()}.xlsx`);
+  }
+
+  function exportCSV() {
+    const data = getExportData();
+    if (data.length === 0) { showToast("ไม่มีข้อมูลสำหรับ Export", "error"); return; }
+    const headers = Object.keys(data[0]);
+    const csv = [headers.join(','), ...data.map(row => headers.map(h => `"${(row[h]||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `PO_List_${getDateStamp()}.csv`;
+    link.click();
+  }
+
+  function exportPDF() {
+    const data = getExportData();
+    if (data.length === 0) { showToast("ไม่มีข้อมูลสำหรับ Export", "error"); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("KL Service - PO Tracking Report", 14, 15);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated: ${new Date().toLocaleString('en-US')}`, 14, 22);
+    doc.text(`Total: ${data.length} records`, 14, 27);
+    doc.autoTable({
+      startY: 32,
+      head: [['Date Receive', 'PO Number', 'Customer', 'ETD Date', 'Status']],
+      body: data.map(row => [row['Date Receive'], row['PO Number'], row['Customer Name'], row['ETD Date'], row['Status']]),
+      headStyles: { fillColor: [44, 44, 42], textColor: 255 },
+      alternateRowStyles: { fillColor: [250, 250, 247] },
+      styles: { fontSize: 9, cellPadding: 4 }
+    });
+    doc.save(`PO_List_${getDateStamp()}.pdf`);
+  }
+
+  function getDateStamp() {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  // ========== AUTH ==========
+  document.getElementById("loginBtn").addEventListener("click", () => {
+    document.getElementById("loginModal").classList.add("active");
+    document.getElementById("passwordInput").focus();
+  });
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    isEditMode = false;
+    updateUIMode();
+  });
+
+  function closeLoginModal() {
+    document.getElementById("loginModal").classList.remove("active");
+    document.getElementById("passwordInput").value = "";
+    document.getElementById("loginAlert").classList.remove("show");
+  }
+
+  function checkPassword() {
+    const pwd = document.getElementById("passwordInput").value;
+    const alert = document.getElementById("loginAlert");
+    if (pwd === ADMIN_PASSWORD) {
+      isEditMode = true;
+      updateUIMode();
+      closeLoginModal();
+      showToast("✓ เข้าสู่โหมดแก้ไขแล้ว", "success");
+    } else {
+      alert.textContent = "❌ รหัสผ่านไม่ถูกต้อง";
+      alert.classList.add("show");
+    }
+  }
+
+  function updateUIMode() {
+    const badge = document.getElementById("modeBadge");
+    if (isEditMode) {
+      badge.textContent = "✏️ โหมดแก้ไข";
+      badge.className = "mode-badge mode-edit";
+      document.getElementById("loginBtn").style.display = "none";
+      document.getElementById("logoutBtn").style.display = "inline-flex";
+      document.getElementById("addBtn").style.display = "inline-flex";
+      document.getElementById("actionsHeader").style.display = "table-cell";
+    } else {
+      badge.textContent = "👁 โหมดดูข้อมูล";
+      badge.className = "mode-badge mode-view";
+      document.getElementById("loginBtn").style.display = "inline-flex";
+      document.getElementById("logoutBtn").style.display = "none";
+      document.getElementById("addBtn").style.display = "none";
+      document.getElementById("actionsHeader").style.display = "none";
+    }
+    renderTable();
+  }
+
+  // ========== CRUD ==========
+  document.getElementById("addBtn").addEventListener("click", () => {
+    editingPOId = null;
+    document.getElementById("poModalTitle").textContent = "เพิ่ม PO ใหม่";
+    document.getElementById("dateReceive").value = new Date().toISOString().split('T')[0];
+    document.getElementById("poNumber").value = "";
+    document.getElementById("customerName").value = "";
+    document.getElementById("etdDate").value = "";
+    document.getElementById("poStatus").value = "Pending";
+    document.getElementById("poAlert").classList.remove("show");
+    // File upload not available until PO is created
+    document.getElementById("fileUploadSection").style.display = "none";
+    resetFileUI();
+    document.getElementById("poModal").classList.add("active");
+  });
+
+  function editPO(id) {
+    const po = poList.find(p => p.id == id);
+    if (!po) return;
+    editingPOId = id;
+    document.getElementById("poModalTitle").textContent = "แก้ไขข้อมูล PO";
+    document.getElementById("dateReceive").value = po.dateReceive;
+    document.getElementById("poNumber").value = po.poNumber;
+    document.getElementById("customerName").value = po.customerName;
+    document.getElementById("etdDate").value = po.etdDate;
+    document.getElementById("poStatus").value = po.status;
+    document.getElementById("poAlert").classList.remove("show");
+    // Show file upload section when editing
+    document.getElementById("fileUploadSection").style.display = "block";
+    resetFileUI();
+    if (po.fileId && po.fileName) {
+      currentFileInfo = { fileId: po.fileId, fileName: po.fileName };
+      showFileUI(po.fileName, null, true);
+    }
+    document.getElementById("poModal").classList.add("active");
+  }
+
+  function closePOModal() {
+    document.getElementById("poModal").classList.remove("active");
+  }
+
+  async function savePO() {
+    const dateReceive = document.getElementById("dateReceive").value;
+    const poNumber = document.getElementById("poNumber").value.trim();
+    const customerName = document.getElementById("customerName").value.trim();
+    const etdDate = document.getElementById("etdDate").value;
+    const status = document.getElementById("poStatus").value;
+    const alert = document.getElementById("poAlert");
+    const btn = document.getElementById("savePOBtn");
+
+    if (!dateReceive || !poNumber || !customerName || !etdDate) {
+      alert.textContent = "⚠️ กรุณากรอกข้อมูลให้ครบทุกช่อง";
+      alert.classList.add("show");
+      return;
+    }
+
+    if (!editingPOId && poList.some(p => String(p.poNumber).toLowerCase() === poNumber.toLowerCase())) {
+      alert.textContent = "⚠️ PO Number นี้มีอยู่แล้ว";
+      alert.classList.add("show");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "กำลังบันทึก...";
+
+    try {
+      const data = { dateReceive, poNumber, customerName, etdDate, status };
+      let targetId = editingPOId;
+
+      if (editingPOId) {
+        await apiPost("update", { id: editingPOId, data });
+      } else {
+        const result = await apiPost("create", { data });
+        targetId = result.id;
+      }
+
+      // Upload file if pending
+      if (pendingFile) {
+        btn.textContent = "กำลังอัปโหลดไฟล์...";
+        await uploadFileToServer(targetId, pendingFile);
+      }
+
+      showToast(editingPOId ? "✓ แก้ไขสำเร็จ" : "✓ เพิ่ม PO สำเร็จ", "success");
+      closePOModal();
+      await loadData(false);
+    } catch (err) {
+      alert.textContent = "✗ บันทึกไม่สำเร็จ: " + err.message;
+      alert.classList.add("show");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "บันทึก";
+    }
+  }
+
+  // ========== FILE UPLOAD ==========
+  function resetFileUI() {
+    pendingFile = null;
+    currentFileInfo = null;
+    document.getElementById("fileInput").value = "";
+    document.getElementById("fileUploadEmpty").style.display = "block";
+    document.getElementById("fileUploadHasFile").style.display = "none";
+    document.getElementById("fileUploadArea").classList.remove("has-file");
+    document.getElementById("uploadProgress").classList.remove("show");
+    document.getElementById("uploadProgressBar").style.width = "0%";
+  }
+
+  function showFileUI(fileName, fileSize, hasViewBtn) {
+    document.getElementById("fileUploadEmpty").style.display = "none";
+    document.getElementById("fileUploadHasFile").style.display = "block";
+    document.getElementById("fileUploadArea").classList.add("has-file");
+    document.getElementById("uploadedFileName").textContent = fileName;
+    document.getElementById("uploadedFileSize").textContent = fileSize ? formatFileSize(fileSize) : "ไฟล์ที่อัปโหลดไว้";
+    document.getElementById("viewFileBtn").style.display = hasViewBtn ? "inline-flex" : "none";
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + " KB";
+    return (bytes/1024/1024).toFixed(2) + " MB";
+  }
+
+  function viewCurrentFile() {
+    if (currentFileInfo && currentFileInfo.fileId) {
+      window.open(`https://drive.google.com/file/d/${currentFileInfo.fileId}/view`, "_blank");
+    }
+  }
+
+  async function removeFile() {
+    if (pendingFile) {
+      // Just remove pending file (not yet uploaded)
+      resetFileUI();
+      return;
+    }
+    if (currentFileInfo && editingPOId) {
+      if (!confirm("ต้องการลบไฟล์แนบนี้ใช่หรือไม่?")) return;
+      try {
+        await apiPost("deleteFile", { id: editingPOId });
+        showToast("✓ ลบไฟล์สำเร็จ", "success");
+        resetFileUI();
+        // Update local data
+        const po = poList.find(p => p.id == editingPOId);
+        if (po) { po.fileId = ""; po.fileName = ""; }
+      } catch (err) {
+        showToast("✗ ลบไฟล์ไม่สำเร็จ: " + err.message, "error");
+      }
+    }
+  }
+
+  function handleFileSelect(file) {
+    if (!file) return;
+
+    // Validate type
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      showToast("⚠️ กรุณาเลือกไฟล์ PDF เท่านั้น", "error");
+      return;
+    }
+
+    // Validate size (5MB)
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      showToast("⚠️ ไฟล์ใหญ่เกินไป (สูงสุด 5 MB)", "error");
+      return;
+    }
+
+    pendingFile = file;
+    currentFileInfo = null;
+    showFileUI(file.name, file.size, false);
+  }
+
+  async function uploadFileToServer(poId, file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          // Get base64 part only (remove "data:application/pdf;base64," prefix)
+          const base64 = reader.result.split(",")[1];
+
+          document.getElementById("uploadProgress").classList.add("show");
+          document.getElementById("uploadProgressBar").style.width = "50%";
+
+          await apiPost("uploadFile", {
+            id: poId,
+            fileName: file.name,
+            fileData: base64,
+            mimeType: file.type || "application/pdf"
+          });
+
+          document.getElementById("uploadProgressBar").style.width = "100%";
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์ได้"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function deletePO(id) {
+    const po = poList.find(p => p.id == id);
+    if (!po) return;
+    if (!confirm(`ต้องการลบ PO "${po.poNumber}" ใช่หรือไม่?`)) return;
+    try {
+      await apiPost("delete", { id });
+      showToast("✓ ลบสำเร็จ", "success");
+      await loadData(false);
+    } catch (err) {
+      showToast("✗ ลบไม่สำเร็จ: " + err.message, "error");
+    }
+  }
+
+  // ========== TABS ==========
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("view" + tab.dataset.view.charAt(0).toUpperCase() + tab.dataset.view.slice(1)).classList.add("active");
+      if (tab.dataset.view === "dashboard") setTimeout(renderCharts, 50);
+    });
+  });
+
+  // ========== EVENTS ==========
+  ["searchInput","filterStatus","filterMonth","filterYear"].forEach(id => {
+    document.getElementById(id).addEventListener("input", renderTable);
+    document.getElementById(id).addEventListener("change", renderTable);
+  });
+  ["dashMonth","dashYear"].forEach(id => {
+    document.getElementById(id).addEventListener("change", renderCharts);
+  });
+  document.getElementById("passwordInput").addEventListener("keypress", e => {
+    if (e.key === "Enter") checkPassword();
+  });
+  document.querySelectorAll(".modal-overlay").forEach(overlay => {
+    overlay.addEventListener("click", e => { if (e.target === overlay) overlay.classList.remove("active"); });
+  });
+
+  // File input change
+  document.getElementById("fileInput").addEventListener("change", e => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileSelect(e.target.files[0]);
+    }
+  });
+
+  // Drag and drop
+  const dropArea = document.getElementById("fileUploadArea");
+  ["dragenter","dragover"].forEach(evt => {
+    dropArea.addEventListener(evt, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropArea.style.borderColor = "#1E4585";
+      dropArea.style.background = "#E3EBF7";
+    });
+  });
+  ["dragleave","drop"].forEach(evt => {
+    dropArea.addEventListener(evt, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!dropArea.classList.contains("has-file")) {
+        dropArea.style.borderColor = "";
+        dropArea.style.background = "";
+      }
+    });
+  });
+  dropArea.addEventListener("drop", e => {
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
+    }
+  });
+
+  // ========== INIT ==========
+  loadData();
+  startAutoRefresh();
+</script>
+
+</body>
+</html>
